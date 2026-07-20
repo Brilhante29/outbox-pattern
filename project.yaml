@@ -5,7 +5,7 @@ program:
   narrative_fit: Proves transactional outbox pattern prevents message loss under system failure
   shared_assets:
     - outbox-benchmark-harness
-status: benchmarked
+status: published
 claim: outbox transacional
 stack:
   - java21
