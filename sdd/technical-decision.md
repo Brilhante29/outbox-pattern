@@ -2,119 +2,98 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Decision Type
 
-`<stack|api-style|cloud|messaging|database|library|runtime|framework>`
+stack
 
 ## Context
 
-Project: `<project-name>`
-Problem: `<problem to solve>`
-Portfolio program: `<program>`
-Public signal: `<GitHub/LinkedIn proficiency signal>`
-Benchmark: `<metric>`
+Project: outbox-pattern
+Problem: Prove transactional outbox pattern prevents message loss under failure
+Portfolio program: backend-reliability-platform
+Public signal: Java/Spring Boot enterprise reliability pattern
+Benchmark: lost_messages_under_failure
 
 ## Selected Option
 
-Selected: `<option>`
+Selected: Spring Boot 3.4 + Java 21 + in-memory adapters
 
 Reason:
 
-`<Why this option fits the problem, benchmark, and public signal.>`
+Spring Boot is the standard Java framework for transactional patterns. In-memory adapters avoid external infrastructure dependencies while proving the outbox recovery mechanism. The benchmark runs entirely in Docker with no paid services.
 
 ## Decision Brain Fields
 
-- Stack profile: `<spring-kotlin-backend|fastapi-backend|go-backend|node-typescript-backend|angular|nextjs|python-ml|terraform>`
-- API style: `<rest-http|graphql|grpc|websocket|sse|cli>`
-- Messaging: `<none|outbox-only|rabbitmq|kafka|redis-streams|nats>`
-- Cloud mode: `<none|kumo-local-first|adapter-fake|real-cloud-required>`
-- Database/runtime: `<selection>`
-- Library policy: `<selection>`
+- Stack profile: spring-kotlin-backend
+- API style: rest-http
+- Messaging: outbox-only
+- Cloud mode: none
+- Database/runtime: none (in-memory)
+- Library policy: Minimal dependencies: spring-boot-starter-web, jackson-databind, jackson-datatype-jsr310
 
 ## Engineering Principles
 
 Coupling boundary:
 
-`<Domain/use cases must not depend on framework, DB, broker, cloud SDK, transport, or UI.>`
+Domain/use cases must not depend on framework, DB, broker, cloud SDK, transport, or UI.
 
 SOLID application:
 
-- SRP: `<how responsibilities are split>`
-- OCP: `<how behavior extends without rewriting stable policy>`
-- LSP: `<how adapters/fakes/reals stay substitutable>`
-- ISP: `<small ports/interfaces used>`
-- DIP: `<high-level policy depends on abstractions>`
+- SRP: Each class has one responsibility (event, repository, publisher, processor, controller, service)
+- OCP: New event types added without modifying existing events
+- LSP: InMemoryOutboxRepository is substitutable for a real DB repository
+- ISP: Small interfaces (save, markPublished, findPending)
+- DIP: OutboxProcessor depends on OutboxRepository and MessagePublisher abstractions
 
 Simplicity:
 
-- KISS: `<simplest design that proves the claim>`
-- YAGNI: `<future abstraction intentionally not added>`
-- DRY: `<duplicated business knowledge removed without premature abstraction>`
+- KISS: In-memory stores simulate DB and broker; no external infrastructure needed
+- YAGNI: No JPA, no Hibernate, no real database — not needed to prove the claim
+- DRY: No duplicated business knowledge; event creation encapsulated in OrderService
 
 Testability evidence:
 
-- `<use case test without transport/infrastructure>`
-- `<adapter or contract test>`
+- OrderServiceTest tests use case without transport/infrastructure
+- InMemoryOutboxRepositoryTest tests adapter behavior
+
 ## Rejected Options
 
 | Option | Why rejected |
 |---|---|
-| `<option>` | `<reason>` |
-| `<option>` | `<reason>` |
+| Spring Data JPA + PostgreSQL | Adds latency and complexity; in-memory suffices for benchmark |
+| Real Redpanda/Kafka | Would require running containers and managing topics |
+| Kotlin instead of Java | Java is more canonical for enterprise outbox pattern examples |
 
 ## API Contract
 
-Contract artifact:
+REST HTTP:
 
-`<OpenAPI|GraphQL schema|protobuf|event contract|CLI output schema|none>`
-
-GraphQL controls, when applicable:
-
-- Query complexity/depth limit: `<yes|no|not applicable>`
-- N+1 prevention: `<DataLoader/batching plan|not applicable>`
-- Field-level auth rule: `<yes|no|not applicable>`
+- POST /orders -> 200 {"orderId": "uuid"}
 
 ## Cloud Local-First
 
-Local provider:
-
-`<kumo|none|adapter fake>`
-
-Real provider target:
-
-`<aws|none|other>`
-
-Config switch:
-
-```txt
-CLOUD_PROVIDER=<kumo|aws|none>
-CLOUD_ENDPOINT=http://localhost:4566
-```
-
-Unsupported local behaviors:
-
-- `<behavior or none>`
+Local provider: none (Docker only)
+Real provider target: none
+Config switch: none
 
 ## Benchmark Impact
 
-Expected impact:
-
-- `<metric/result this decision should improve or clarify>`
+Expected impact: lost_messages_under_failure = 0 (outbox pattern guarantees recovery)
 
 Validation command:
 
-```powershell
-<command>
+```bash
+docker run --rm outbox-pattern benchmark
 ```
 
 ## Operational Cost
 
-- Docker services added: `<none|kumo|postgres|redis|rabbitmq|redpanda|...>`
-- Local demo complexity: `<low|medium|high>`
-- Failure case required: `<yes|no>`
+- Docker services added: none (single container)
+- Local demo complexity: low
+- Failure case required: yes (SimulatedFailureInjector)
 
 ## Follow-up
 
-- `<what must be revisited if benchmark fails>`
+If benchmark shows lost messages > 0, investigate OutboxProcessor error handling and retry logic.

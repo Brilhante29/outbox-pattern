@@ -2,68 +2,73 @@
 
 ## Status
 
-Proposed
+Accepted
 
 ## Context
 
-Project: `<project-name>`
-Claim: `<measurable claim>`
-Benchmark: `<primary metric>`
+Project: outbox-pattern
+Claim: outbox transacional — zero messages lost under failure
+Benchmark: lost_messages_under_failure
 
 Problem forces:
 
-- Domain complexity: `<low|medium|high>`
-- Integration pressure: `<low|medium|high>`
-- UI state complexity: `<low|medium|high|none>`
-- Data/ML reproducibility: `<low|medium|high>`
-- Auditability/event history: `<low|medium|high>`
-- Throughput/async pressure: `<low|medium|high>`
-- Independent deployability need: `<low|medium|high>`
+- Domain complexity: low
+- Integration pressure: low
+- UI state complexity: none
+- Data/ML reproducibility: none
+- Auditability/event history: low
+- Throughput/async pressure: medium
+- Independent deployability need: none
 
 ## Decision
 
-Chosen architecture: `<style>`
+Chosen architecture: hexagonal (ports/adapters)
 
 Reason:
 
-`<Explain why this architecture fits the actual problem and benchmark.>`
+The transactional outbox pattern naturally maps to hexagonal architecture. The domain defines two ports (OutboxRepository and MessagePublisher). The application layer implements use cases (order creation + outbox event). Infrastructure provides in-memory adapters. The OutboxProcessor orchestrates recovery. This separation proves the claim without external infrastructure.
 
 Dependency rule:
 
-`<Example: domain/application do not depend on infra; adapters depend inward through ports.>`
+Domain/application do not depend on infra; adapters depend inward through ports.
 
 ## Rejected Alternatives
 
 | Alternative | Why rejected |
 |---|---|
-| `<style>` | `<reason>` |
-| `<style>` | `<reason>` |
+| MVC | Couples domain to infrastructure; does not emphasize port/adapter separation |
+| Event-driven microservices | Overkill for proving the outbox pattern claim |
 
 ## Folder Layout
 
-```txt
-src/
-  <folders>
-test/
-benchmarks/
+```
+src/main/java/com/portfolio/outbox/
+  OutboxApplication.java
+  domain/         (OutboxEvent, OutboxStatus, OutboxRepository, MessagePublisher, OutboxProcessor)
+  application/    (OrderController, OrderService)
+  infrastructure/ (InMemoryOutboxRepository, InMemoryMessagePublisher, SimulatedFailureInjector)
+  benchmark/      (OutboxBenchmark, BenchmarkResult)
 ```
 
 ## Testing Strategy
 
-- Unit tests: `<what is isolated>`
-- Integration tests: `<what is wired>`
-- Benchmark: `<what proves the claim>`
+- Unit tests: domain entities, repository, service
+- Integration tests: benchmark end-to-end
+- Benchmark: docker run with benchmark command
 
 ## Consequences
 
 Positive:
 
-- `<benefit>`
+- Clean separation of concerns
+- Testability without infrastructure
+- Ports can be swapped for real DB/broker later
 
 Tradeoffs:
 
-- `<cost>`
+- In-memory store does not prove real DB transactional behavior
 
 Migration path:
 
-- `<how to evolve if the problem grows>`
+- Replace InMemoryOutboxRepository with Spring Data JPA + PostgreSQL
+- Replace InMemoryMessagePublisher with Redpanda/Kafka producer

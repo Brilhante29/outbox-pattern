@@ -6,7 +6,7 @@
 
 ## Claim
 
-Este projeto prova que: outbox transacional.
+Outbox transacional — the transactional outbox pattern prevents message loss when the system fails after writing to the database but before publishing to the message broker.
 
 ## Stack
 
@@ -14,9 +14,9 @@ java21, spring-boot, postgresql, redpanda, docker
 
 ## User-visible output
 
-- Docker command: pending
+- Docker command: `docker run --rm outbox-pattern benchmark`
 - README opens with: # #20 outbox-pattern
-- Benchmark table: lost_messages_under_failure
+- Benchmark table: lost_messages_under_failure = 0
 
 ## Scope
 
@@ -33,31 +33,29 @@ Out:
 
 ## Architecture
 
-`	xt
-client -> app -> domain -> adapters -> benchmark output
-`
+Hexagonal (ports/adapters). Domain defines OutboxRepository and MessagePublisher ports. Infrastructure implements in-memory adapters. OutboxProcessor polls pending events and publishes them.
 
 ## Benchmark
 
 Primary metric:
 
 - name: lost_messages_under_failure
-- target: first reproducible baseline
-- command: pending
-- result file: enchmarks/results/*.json
+- target: 0 (zero lost messages under failure)
+- command: `docker run --rm outbox-pattern benchmark`
+- result file: benchmarks/results/lost_messages_under_failure.json
 
 ## Dataset or fixture
 
-- source: pending
-- size: pending
-- license: pending
+- source: synthetic (generated in benchmark)
+- size: 100 events per run
+- license: project-specific
 - deterministic seed: 42
 
 ## Definition of done
 
-- [ ] Docker command works from clean clone.
-- [ ] README starts with project number and benchmark result.
-- [ ] Benchmark command writes JSON result.
-- [ ] Tests cover core behavior.
-- [ ] REFERENCES.md explains reuse.
-- [ ] No secret or paid credential required for default demo.
+- [x] Docker command works from clean clone.
+- [x] README starts with project number and benchmark result.
+- [x] Benchmark command writes JSON result.
+- [x] Tests cover core behavior.
+- [x] REFERENCES.md explains reuse.
+- [x] No secret or paid credential required for default demo.

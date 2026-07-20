@@ -3,6 +3,7 @@ __pycache__/
 .ruff_cache/
 .venv/
 benchmarks/results/*.json
+!benchmarks/results/lost_messages_under_failure.json
 dist/
 target/
 build/

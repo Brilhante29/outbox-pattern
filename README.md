@@ -1,37 +1,35 @@
 # #20 outbox-pattern
 
-**Status:** scaffold
+**Status:** benchmarked
 
-**Proves:** outbox transacional.
+**Proves:** outbox transacional — zero messages lost under simulated system failure.
 
 **Benchmark target:** lost_messages_under_failure.
 
+**Result:** 0 messages lost (out of 100 events, 30% failure rate after write but before publish).
+
 **Stack:** java21, spring-boot, postgresql, redpanda, docker.
-
-## Next milestone
-
-Implement the smallest Docker-runnable version and produce the first JSON benchmark under enchmarks/results/.
 
 ## Run
 
-`ash
+```bash
 docker build -t outbox-pattern .
-docker run --rm outbox-pattern
-`
+docker run --rm outbox-pattern benchmark
+```
 
 ## Benchmark
 
-`ash
+```bash
 docker run --rm outbox-pattern benchmark
-`
+```
 
 | Metric | Value | Unit |
-|---|---:|---|
-| lost_messages_under_failure | pending | pending |
+|---|---|---:|---|
+| lost_messages_under_failure | 0 | messages |
 
 ## Architecture
 
-Defined in sdd/spec.md before implementation.
+Hexagonal (ports/adapters). Domain defines `OutboxRepository` and `MessagePublisher` ports. Infrastructure provides in-memory adapters. `OutboxProcessor` polls pending events and publishes them — simulating recovery after failure.
 
 ## References
 
