@@ -110,7 +110,7 @@ benchmark:
   primary_metric: lost_messages_under_failure
   unit: messages
   command: docker run --rm outbox-pattern benchmark
-  result_path: benchmarks/results/*.json
+  result_path: benchmarks/results/lost_messages_under_failure.json
 release:
   docker: built
   no_secret_default_path: true
