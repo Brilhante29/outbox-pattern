@@ -1,14 +1,15 @@
 FROM gradle:8.12-jdk21 AS build
 WORKDIR /app
-COPY gradle/libs.versions.toml gradle/libs.versions.toml
-COPY gradle.lockfile build.gradle.kts settings.gradle.kts ./
+COPY gradle gradle
+COPY gradlew gradlew.bat gradle.lockfile build.gradle.kts settings.gradle.kts ./
+RUN chmod +x gradlew
 RUN --mount=type=cache,target=/home/gradle/.gradle \
-    gradle dependencies --configuration runtimeClasspath --no-daemon
+    ./gradlew dependencies --configuration runtimeClasspath --no-daemon
 COPY src ./src
 COPY contracts ./contracts
 COPY .portfolio/contracts ./.portfolio/contracts
 RUN --mount=type=cache,target=/home/gradle/.gradle \
-    gradle test bootJar -PexcludeIntegration --no-daemon
+    ./gradlew test bootJar -PexcludeIntegration --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
