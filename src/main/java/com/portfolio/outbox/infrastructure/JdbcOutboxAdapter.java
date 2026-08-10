@@ -18,6 +18,7 @@ import org.springframework.transaction.support.TransactionTemplate;
 import javax.sql.DataSource;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
@@ -44,7 +45,7 @@ public class JdbcOutboxAdapter implements OrderTransaction, OutboxStore, Process
         transaction.executeWithoutResult(ignored -> {
             jdbc.update(
                     "INSERT INTO orders(order_id, payload, created_at) VALUES (?, ?::jsonb, ?)",
-                    order.id(), writeJson(order.payload()), order.createdAt()
+                    order.id(), writeJson(order.payload()), Timestamp.from(order.createdAt())
             );
             jdbc.update("""
                     INSERT INTO outbox_event(
@@ -53,7 +54,8 @@ public class JdbcOutboxAdapter implements OrderTransaction, OutboxStore, Process
                     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'PENDING', ?)
                     """,
                     event.eventId(), event.eventType(), event.eventVersion(), event.aggregateId(), event.sagaId(),
-                    event.correlationId(), event.causationId(), event.occurredAt(), writeJson(event.payload()), event.occurredAt()
+                    event.correlationId(), event.causationId(), Timestamp.from(event.occurredAt()),
+                    writeJson(event.payload()), Timestamp.from(event.occurredAt())
             );
         });
     }
@@ -92,7 +94,7 @@ public class JdbcOutboxAdapter implements OrderTransaction, OutboxStore, Process
                 UPDATE outbox_event
                 SET status = 'PUBLISHED', published_at = ?, lease_owner = NULL, lease_until = NULL
                 WHERE event_id = ? AND status = 'PROCESSING' AND lease_owner = ?
-                """, publishedAt, eventId, workerId);
+                """, Timestamp.from(publishedAt), eventId, workerId);
         requireSingleUpdate(updated, eventId, "publish");
     }
 
@@ -102,7 +104,7 @@ public class JdbcOutboxAdapter implements OrderTransaction, OutboxStore, Process
                 UPDATE outbox_event
                 SET status = 'FAILED', next_attempt_at = ?, last_error = ?, lease_owner = NULL, lease_until = NULL
                 WHERE event_id = ? AND status = 'PROCESSING' AND lease_owner = ?
-                """, nextAttemptAt, error, eventId, workerId);
+                """, Timestamp.from(nextAttemptAt), error, eventId, workerId);
         requireSingleUpdate(updated, eventId, "fail");
     }
 
@@ -112,7 +114,7 @@ public class JdbcOutboxAdapter implements OrderTransaction, OutboxStore, Process
                 INSERT INTO processed_event(event_id, processed_at)
                 VALUES (?, ?)
                 ON CONFLICT (event_id) DO NOTHING
-                """, eventId, processedAt) == 1;
+                """, eventId, Timestamp.from(processedAt)) == 1;
     }
 
     public void reset() {
