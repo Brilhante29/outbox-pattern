@@ -1,74 +1,52 @@
-# Architecture Decision
+# Architecture Decision: Hexagonal Transactional Outbox
 
 ## Status
 
-Accepted
+Accepted.
 
-## Context
+## Forces
 
-Project: outbox-pattern
-Claim: outbox transacional — zero messages lost under failure
-Benchmark: lost_messages_under_failure
-
-Problem forces:
-
-- Domain complexity: low
-- Integration pressure: low
-- UI state complexity: none
-- Data/ML reproducibility: none
-- Auditability/event history: low
-- Throughput/async pressure: medium
-- Independent deployability need: none
+- Consistency and failure recovery are the claim, so real database and broker semantics are mandatory.
+- Claim-critical SQL must remain visible and testable.
+- Kafka and PostgreSQL must be replaceable without changing domain records or application policy.
+- At-least-once delivery makes duplicates normal, not exceptional.
 
 ## Decision
 
-Chosen architecture: hexagonal (ports/adapters)
+Use a small hexagonal Spring Boot service:
 
-Reason:
+```text
+HTTP adapter -> OrderService -> OrderTransaction port -> JdbcOutboxAdapter
+OutboxWorker -> OutboxStore port -> JdbcOutboxAdapter
+OutboxWorker -> EventPublisher port -> KafkaMessagePublisher
+DeduplicatingEventConsumer -> ProcessedEventStore port -> JdbcOutboxAdapter
+```
 
-The transactional outbox pattern naturally maps to hexagonal architecture. The domain defines two ports (OutboxRepository and MessagePublisher). The application layer implements use cases (order creation + outbox event). Infrastructure provides in-memory adapters. The OutboxProcessor orchestrates recovery. This separation proves the claim without external infrastructure.
+`JdbcOutboxAdapter.persist` owns one explicit transaction containing the order insert and the outbox insert. Worker claims are one PostgreSQL statement combining `FOR UPDATE SKIP LOCKED` with a lease update. Kafka publication occurs outside the database transaction; success updates the row to `PUBLISHED`, while any failure returns it to retryable `FAILED`.
 
-Dependency rule:
+## Dependency Rule
 
-Domain/application do not depend on infra; adapters depend inward through ports.
+- Domain imports only JDK types.
+- Application imports domain and application ports.
+- HTTP, JDBC, Kafka, JSON Schema, Docker, and Spring remain in adapters/configuration.
+- Benchmark code may inspect adapter metrics but does not move policy into the domain.
+
+## Principles Evidence
+
+- SRP: create order, claim work, publish, and deduplicate are separate responsibilities.
+- OCP: alternative databases or brokers implement the same small ports.
+- LSP: fakes used by unit tests and real adapters preserve the port contracts.
+- ISP: transaction, outbox, publisher, and processed-event ports are separate.
+- DIP: use cases depend on ports, not JDBC or Kafka clients.
+- KISS: explicit JDBC SQL replaces an ORM because locking SQL is the proof.
+- YAGNI: no distributed transaction, broker abstraction framework, or Kubernetes.
 
 ## Rejected Alternatives
 
-| Alternative | Why rejected |
+| Alternative | Rejection |
 |---|---|
-| MVC | Couples domain to infrastructure; does not emphasize port/adapter separation |
-| Event-driven microservices | Overkill for proving the outbox pattern claim |
-
-## Folder Layout
-
-```
-src/main/java/com/portfolio/outbox/
-  OutboxApplication.java
-  domain/         (OutboxEvent, OutboxStatus, OutboxRepository, MessagePublisher, OutboxProcessor)
-  application/    (OrderController, OrderService)
-  infrastructure/ (InMemoryOutboxRepository, InMemoryMessagePublisher, SimulatedFailureInjector)
-  benchmark/      (OutboxBenchmark, BenchmarkResult)
-```
-
-## Testing Strategy
-
-- Unit tests: domain entities, repository, service
-- Integration tests: benchmark end-to-end
-- Benchmark: docker run with benchmark command
-
-## Consequences
-
-Positive:
-
-- Clean separation of concerns
-- Testability without infrastructure
-- Ports can be swapped for real DB/broker later
-
-Tradeoffs:
-
-- In-memory store does not prove real DB transactional behavior
-
-Migration path:
-
-- Replace InMemoryOutboxRepository with Spring Data JPA + PostgreSQL
-- Replace InMemoryMessagePublisher with Redpanda/Kafka producer
+| In-memory maps | Cannot prove durability, transaction atomicity, locking, or broker recovery |
+| Direct DB + Kafka dual write | Leaves a crash window with a committed order and missing event |
+| Two-phase commit | Kafka and PostgreSQL coupling is heavier than at-least-once plus idempotency |
+| JPA/Hibernate | Hides claim-critical locking and update semantics without adding value here |
+| Kafka exactly-once claim | Does not make an external database side effect exactly once by itself |

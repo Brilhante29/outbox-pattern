@@ -7,7 +7,7 @@ on:
     branches: [main, "codex/**", "agent/**"]
 
 jobs:
-  build:
+  validate:
     runs-on: ubuntu-latest
 
     steps:
@@ -22,20 +22,27 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@ed408507eac070d1f99cc633dbcf757c94c7933a # v4.4.4
 
-      - name: Run tests
-        run: ./gradlew test
+      - name: Unit and PostgreSQL integration tests
+        run: ./gradlew test --no-daemon
 
-      - name: Build JAR
-        run: ./gradlew bootJar
+      - name: Run real PostgreSQL and Redpanda benchmark
+        shell: pwsh
+        run: |
+          ./tools/benchmark.ps1 `
+            -Producer github-actions `
+            -CiRunUrl "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
-      - name: Build Docker image
-        run: docker build -t outbox-pattern .
-
-      - name: Run benchmark
-        run: docker run --rm outbox-pattern benchmark
+      - name: Validate repository and regenerated evidence
+        shell: pwsh
+        run: ./tools/validate-project.ps1 -SkipDocker
 
       - name: Upload benchmark result
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: benchmark-result
-          path: benchmarks/results/*.json
+          path: benchmarks/results/outbox-benchmark-v2.json
+          if-no-files-found: error
+
+      - name: Stop local-first services
+        if: always()
+        run: docker compose down --volumes --remove-orphans

@@ -1,22 +1,31 @@
+manifest_version: 2
 id: 20
 name: outbox-pattern
 program:
   id: backend-reliability-platform
-  narrative_fit: Proves transactional outbox pattern prevents message loss under system failure
+  narrative_fit: Guarantees that committed commerce events survive process and broker failures before saga or downstream consumers act on them
+  related_repositories:
+    - spring-hexagonal-payments
+    - event-sourcing-orders
+    - saga-orchestrator
+    - cache-strategies-bench
   shared_assets:
-    - outbox-benchmark-harness
-status: benchmarked
-claim: outbox transacional
+    - contracts/commerce-event-v1.schema.json
+    - transactional-outbox-failure-harness
+status: implemented-awaiting-fresh-evidence
+claim: A real PostgreSQL transactional outbox reaches a Kafka-compatible consumer with zero message loss under process and broker failures
 stack:
-  - java21
-  - spring-boot
-  - postgresql
-  - redpanda
-  - docker
+  language: java21
+  framework: spring-boot-3.4
+  persistence: spring-jdbc-postgresql-17
+  migrations: flyway
+  messaging: kafka-clients-redpanda-26
+  testing: junit5-testcontainers
+  runtime: docker-compose
 language_profile:
   primary: java
-  secondary: []
-  reason: Java/Spring Boot is the standard stack for enterprise transactional patterns
+  secondary: [sql, powershell]
+  reason: Java and Spring expose the enterprise transaction boundary while SQL keeps locking and retry semantics reviewable
 decision_brain:
   agentic_spec:
     source: .portfolio/decision-brain/agentic-spec-governance.yaml
@@ -24,95 +33,68 @@ decision_brain:
     schema: portfolio-system
     project_config: openspec/config.yaml
     component_pack: default-portfolio-project
-    artifact_graph:
-      - intent->portfolio-impact->architecture-record
-      - architecture-record+portfolio-impact->component-pack
-      - component-pack->reuse-delta->benchmark-proof->tasks->verification
   agent_graph:
     mode: principal-agent-orchestrated
     source: .portfolio/decision-brain/agent-graph.yaml
     handoff: sdd/agent-handoff.md
-    local_first_runtime: docker+kumo-when-cloud-behavior-is-needed
+    local_first_runtime: docker-compose-postgresql-redpanda
   reuse_improvement_loop:
     source: .portfolio/decision-brain/reuse-improvement-loop.yaml
     review_path: sdd/reuse-improvement-review.md
     current_status: completed
   principles:
-    coupling_rule: Domain/use cases do not depend on framework, database, broker, cloud SDK, transport, or UI
+    coupling_rule: Domain and application code do not import Spring, JDBC, Kafka, Docker, cloud SDKs, or HTTP
     solid: [srp, ocp, lsp, isp, dip]
-    simplicity_rule: In-memory stores simulate DB and broker; no external infrastructure needed
-    testability_rule: Use cases run without transport/infrastructure via port/adapter fakes
+    simplicity_rule: One service, one database, one broker, explicit SQL, and no ORM are sufficient for this reliability claim
+    testability_rule: Use cases run against ports; PostgreSQL behavior is covered by Testcontainers and the Compose benchmark
+    failure_semantics: At-least-once transport plus consumer idempotency; no exactly-once transport claim
     rejected_overengineering:
-      - JPA/Hibernate (in-memory map is sufficient for benchmark)
-      - Real PostgreSQL/Redpanda containers (would slow benchmark)
-  stack_profile: spring-kotlin-backend
+      - Distributed transaction or two-phase commit
+      - Kubernetes for a local reliability benchmark
+      - ORM abstraction over the claim-critical locking SQL
+  stack_profile: spring-java-reliability
   api_style: rest-http
-  messaging: outbox-only
+  messaging: transactional-outbox-kafka
   cloud:
-    mode: none
-    local_provider: none
-    real_provider_target: none
-    emulated_services: []
-    adapter_rule: ports/adapters keep cloud SDK outside domain/use cases
-    config_switch: none
-    unsupported_behaviors: []
-  database: none (in-memory)
-  runtime: docker
-  library_policy: Spring Boot 3.4 + Jackson for JSON; minimal dependencies for benchmark speed
+    mode: local-first
+    local_provider: docker-compose
+    real_provider_target: managed-postgresql-and-kafka-compatible-broker
+    adapter_rule: EventPublisher and persistence ports isolate provider-specific clients
+    config_switch: DATABASE_URL and KAFKA_BOOTSTRAP_SERVERS
+  database: postgresql-17.6
+  runtime: docker-compose
+  library_policy: Spring JDBC, Flyway, PostgreSQL JDBC, Kafka client, Jackson, NetworkNT JSON Schema, JUnit, Testcontainers
   record_path: sdd/technical-decision.md
-  rejected_options:
-    - option: Spring Data JPA + PostgreSQL
-      reason: Adds latency and complexity for benchmark; in-memory suffices
 architecture:
   style: hexagonal
-  reason: Outbox pattern ports (OutboxRepository, MessagePublisher) naturally align with hexagonal architecture's port/adapter separation
-  problem_forces:
-    domain_complexity: low
-    integration_pressure: low
-    ui_state_complexity: none
-    data_or_ml_reproducibility: none
-    auditability: low
-    throughput_or_async: medium
-    independent_deployability: none
-  dependency_rule: Domain and application layers depend only on abstractions (ports); infrastructure implements ports
+  reason: Transaction, outbox claim, broker publish, and idempotency are independently replaceable boundaries
+  dependency_rule: infrastructure -> application ports -> domain
   boundaries:
-    - domain/ports -> infrastructure/adapters
-  rejected_alternatives:
-    - style: mvc
-      reason: Does not emphasize port/adapter separation needed for outbox pattern
-design_system:
-  tokens: design-system/tokens.yaml
-  readme_components:
-    - readme_header
-    - benchmark_card
-    - architecture_card
-    - references_table
-  diagram_required: false
-reuse:
-  kit_version: local
-  uses:
-    - catalog
-    - programs
-    - proficiency-map
-    - component-packs
-    - openspec-schema
-    - decision-brain
-    - agent-graph
-    - reuse-improvement-loop
-    - architecture
-    - language-profiles
-    - design-system
-    - sdd
-    - harness
-    - templates
-    - skills
+    - application/port/OrderTransaction -> infrastructure/JdbcOutboxAdapter
+    - application/port/OutboxStore -> infrastructure/JdbcOutboxAdapter
+    - application/port/EventPublisher -> infrastructure/KafkaMessagePublisher
+    - application/port/ProcessedEventStore -> infrastructure/JdbcOutboxAdapter
+contract:
+  name: commerce-event-v1
+  path: contracts/commerce-event-v1.schema.json
+  delivery: kafka-compatible
 benchmark:
-  primary_metric: lost_messages_under_failure
-  unit: messages
-  command: docker run --rm outbox-pattern benchmark
-  result_path: benchmarks/results/lost_messages_under_failure.json
+  id: transactional-outbox-failure-recovery
+  command: powershell -NoProfile -ExecutionPolicy Bypass -File tools/benchmark.ps1
+  result_path: benchmarks/results/outbox-benchmark-v2.json
+  repetitions: 3
+  concurrency: 3
+  primary_metric: lost_messages
+  target: 0
+  secondary_metrics: [duplicates, publish_lag_p95, retry_count]
+  real_dependencies: [postgresql, redpanda]
+  failure_scenarios:
+    - hard JVM halt after database commit and before publish
+    - unreachable Kafka bootstrap endpoint
+    - publish succeeds but acknowledgement is lost before database status update
 release:
-  docker: built
+  docker: compose
   no_secret_default_path: true
   readme_has_number: true
   references_documented: true
+  fresh_artifact_required: true

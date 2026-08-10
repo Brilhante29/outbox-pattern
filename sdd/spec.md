@@ -1,61 +1,44 @@
-# Spec: outbox-pattern
+# Spec: #20 outbox-pattern
 
-## Number
+## Measurable Claim
 
-#20
+A real PostgreSQL transactional outbox delivers every committed commerce event to a Kafka-compatible consumer after process and broker failures: `lost_messages = 0`.
 
-## Claim
+## Problem
 
-Outbox transacional — the transactional outbox pattern prevents message loss when the system fails after writing to the database but before publishing to the message broker.
+Writing an order and publishing its event are two independent operations. A process can die between them. Direct dual writes therefore allow committed orders with missing events. The solution must preserve the event durably, publish it at least once, and make duplicate consumer deliveries harmless.
 
-## Stack
+## In Scope
 
-java21, spring-boot, postgresql, redpanda, docker
+- Atomic `orders` and `outbox_event` inserts in PostgreSQL.
+- Concurrent claims using `FOR UPDATE SKIP LOCKED` plus expiring leases.
+- Retry of `PENDING`, `FAILED`, and expired `PROCESSING` rows.
+- Kafka-compatible publication to local Redpanda.
+- Consumer-side deduplication by `eventId` in PostgreSQL.
+- Versioned commerce event JSON Schema.
+- Three hard JVM crashes after commit and before publish.
+- Broker outage and post-publish acknowledgement-loss scenarios.
+- V2 benchmark artifact regenerated on a host bind mount.
 
-## User-visible output
+## Out of Scope
 
-- Docker command: `docker run --rm outbox-pattern benchmark`
-- README opens with: # #20 outbox-pattern
-- Benchmark table: lost_messages_under_failure = 0
+- Exactly-once Kafka transport claims.
+- Distributed transactions or two-phase commit.
+- Production broker clustering, schema registry, or Kubernetes.
+- Business workflow orchestration; that belongs to `saga-orchestrator`.
 
-## Scope
+## Default Path
 
-In:
+- Command: `./tools/benchmark.ps1`
+- Local services: PostgreSQL 17.6 and Redpanda 26.1.14 via Docker Compose.
+- Paid credentials: none.
+- Output: `benchmarks/results/outbox-benchmark-v2.json`.
 
-- Implementar o menor produto funcional que prove o claim.
-- Rodar por Docker.
-- Gerar benchmark JSON reproduzivel.
+## Acceptance
 
-Out:
-
-- Publicar repo antes do primeiro resultado numerico.
-- Depender de segredo pago para o caminho default.
-
-## Architecture
-
-Hexagonal (ports/adapters). Domain defines OutboxRepository and MessagePublisher ports. Infrastructure implements in-memory adapters. OutboxProcessor polls pending events and publishes them.
-
-## Benchmark
-
-Primary metric:
-
-- name: lost_messages_under_failure
-- target: 0 (zero lost messages under failure)
-- command: `docker run --rm outbox-pattern benchmark`
-- result file: benchmarks/results/lost_messages_under_failure.json
-
-## Dataset or fixture
-
-- source: synthetic (generated in benchmark)
-- size: 100 events per run
-- license: project-specific
-- deterministic seed: 42
-
-## Definition of done
-
-- [x] Docker command works from clean clone.
-- [x] README starts with project number and benchmark result.
-- [x] Benchmark command writes JSON result.
-- [x] Tests cover core behavior.
-- [x] REFERENCES.md explains reuse.
-- [x] No secret or paid credential required for default demo.
+- `lost_messages = 0`.
+- Three measured crash repetitions.
+- One duplicate delivery per event is observed and deduplicated.
+- All outbox rows finish `PUBLISHED`.
+- Processed side effects equal unique event IDs.
+- Result passes the local V2 JSON Schema validator before it is written.

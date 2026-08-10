@@ -1,0 +1,84 @@
+name: outbox-pattern
+
+services:
+  postgres:
+    image: postgres:17.6-alpine
+    environment:
+      POSTGRES_DB: outbox
+      POSTGRES_USER: outbox
+      POSTGRES_PASSWORD: outbox
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U outbox -d outbox"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  redpanda:
+    image: docker.redpanda.com/redpandadata/redpanda:v26.1.14
+    command:
+      - redpanda
+      - start
+      - --overprovisioned
+      - --smp=1
+      - --memory=512M
+      - --reserve-memory=0M
+      - --node-id=0
+      - --check=false
+      - --kafka-addr=internal://0.0.0.0:9092,external://0.0.0.0:19092
+      - --advertise-kafka-addr=internal://redpanda:9092,external://localhost:19092
+    ports:
+      - "19092:19092"
+    healthcheck:
+      test: ["CMD-SHELL", "rpk cluster health --brokers=localhost:9092 | grep -q 'Healthy:.*true'"]
+      interval: 3s
+      timeout: 5s
+      retries: 30
+
+  app:
+    image: outbox-pattern:local
+    build:
+      context: .
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-0000000000000000000000000000000000000000}
+    environment: &app-environment
+      DATABASE_URL: jdbc:postgresql://postgres:5432/outbox
+      DATABASE_USER: outbox
+      DATABASE_PASSWORD: outbox
+      KAFKA_BOOTSTRAP_SERVERS: redpanda:9092
+      OUTBOX_TOPIC: commerce.order-events.v1
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+
+  benchmark:
+    image: outbox-pattern:local
+    build:
+      context: .
+      args:
+        SOURCE_COMMIT: ${SOURCE_COMMIT:-0000000000000000000000000000000000000000}
+    command: ["benchmark"]
+    environment:
+      <<: *app-environment
+      RESULT_PATH: /results/outbox-benchmark-v2.json
+      SOURCE_COMMIT: ${SOURCE_COMMIT:-0000000000000000000000000000000000000000}
+      SOURCE_TREE_CLEAN: ${SOURCE_TREE_CLEAN:-false}
+      IMAGE_REF: outbox-pattern:local
+      IMAGE_DIGEST: ${IMAGE_DIGEST:-sha256:0000000000000000000000000000000000000000000000000000000000000000}
+      BENCHMARK_PRODUCER: ${BENCHMARK_PRODUCER:-local}
+      CI_RUN_URL: ${CI_RUN_URL:-}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redpanda:
+        condition: service_healthy
+    volumes:
+      - ./benchmarks/results:/results
+
+volumes:
+  postgres-data:

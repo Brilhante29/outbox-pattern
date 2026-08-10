@@ -2,8 +2,9 @@ __pycache__/
 .pytest_cache/
 .ruff_cache/
 .venv/
+.gradle/
 benchmarks/results/*.json
-!benchmarks/results/lost_messages_under_failure.json
+!benchmarks/results/outbox-benchmark-v2.json
 dist/
 target/
 build/

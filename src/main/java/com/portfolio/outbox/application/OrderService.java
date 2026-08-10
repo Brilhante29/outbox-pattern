@@ -1,8 +1,8 @@
 package com.portfolio.outbox.application;
 
-import com.portfolio.outbox.domain.OutboxEvent;
-import com.portfolio.outbox.domain.OutboxRepository;
-import com.portfolio.outbox.domain.OutboxStatus;
+import com.portfolio.outbox.application.port.OrderTransaction;
+import com.portfolio.outbox.domain.CommerceEvent;
+import com.portfolio.outbox.domain.Order;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
@@ -11,26 +11,31 @@ import java.util.UUID;
 
 @Service
 public class OrderService {
-    private final OutboxRepository outboxRepository;
+    private final OrderTransaction transaction;
 
-    public OrderService(OutboxRepository outboxRepository) {
-        this.outboxRepository = outboxRepository;
+    public OrderService(OrderTransaction transaction) {
+        this.transaction = transaction;
     }
 
     public String createOrder(Map<String, Object> orderData) {
-        String orderId = UUID.randomUUID().toString();
+        Instant now = Instant.now();
+        UUID orderId = UUID.randomUUID();
+        UUID correlationId = UUID.randomUUID();
+        Map<String, Object> payload = orderData == null ? Map.of() : Map.copyOf(orderData);
+        Order order = new Order(orderId, payload, now);
+        CommerceEvent event = new CommerceEvent(
+                UUID.randomUUID(),
+                "order.created",
+                1,
+                orderId,
+                null,
+                correlationId,
+                null,
+                now,
+                payload
+        );
 
-        OutboxEvent event = new OutboxEvent();
-        event.setId(UUID.randomUUID().toString());
-        event.setAggregateType("order");
-        event.setAggregateId(orderId);
-        event.setEventType("order.created");
-        event.setPayload(orderData != null ? orderData.toString() : "{}");
-        event.setStatus(OutboxStatus.PENDING);
-        event.setCreatedAt(Instant.now());
-
-        outboxRepository.save(event);
-
-        return orderId;
+        transaction.persist(order, event);
+        return orderId.toString();
     }
 }

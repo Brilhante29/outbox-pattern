@@ -43,7 +43,10 @@ $requiredFiles = @(
   "sdd/architecture-decision.md",
   "sdd/technical-decision.md",
   "sdd/agent-handoff.md",
-  "sdd/reuse-improvement-review.md"
+  "sdd/reuse-improvement-review.md",
+  "compose.yaml",
+  "contracts/commerce-event-v1.schema.json",
+  "src/main/resources/db/migration/V1__transactional_outbox.sql"
 )
 foreach ($file in $requiredFiles) { Require-File $file }
 
@@ -79,8 +82,32 @@ if ($benchmarkFiles.Count -eq 0) {
 
 Push-Location -LiteralPath $root
 try {
-  foreach ($file in $benchmarkFiles) {
+foreach ($file in $benchmarkFiles) {
     Invoke-Checked "benchmark JSON validation: $($file.Name)" { python -m json.tool $file.FullName | Out-Null }
+  }
+
+  $v2ResultPath = Join-Path $root "benchmarks/results/outbox-benchmark-v2.json"
+  if (Test-Path -LiteralPath $v2ResultPath -PathType Leaf) {
+    $v2 = Get-Content -Raw -LiteralPath $v2ResultPath | ConvertFrom-Json
+    if ($v2.schema_version -ne 2) { Add-Failure "Benchmark artifact must use schema_version 2" }
+    if ($v2.execution.repeat -lt 3) { Add-Failure "Benchmark must contain at least three repetitions" }
+    $requiredMetrics = @("lost_messages", "duplicates", "publish_lag_p95", "retry_count")
+    $metricNames = @($v2.metrics | ForEach-Object { $_.name })
+    foreach ($metric in $requiredMetrics) {
+      if ($metric -notin $metricNames) { Add-Failure "Missing V2 metric: $metric" }
+    }
+    $lostMetric = $v2.metrics | Where-Object { $_.name -eq "lost_messages" }
+    if ($null -eq $lostMetric -or [double]$lostMetric.value -ne 0) {
+      Add-Failure "lost_messages acceptance target was not met"
+    }
+    if ($v2.provenance.source_commit -notmatch '^[0-9a-f]{40}$') {
+      Add-Failure "Benchmark provenance source_commit is invalid"
+    }
+    if ($v2.provenance.clean_tree -ne $true) {
+      Add-Failure "Benchmark provenance must record a clean source tree"
+    }
+  } else {
+    Add-Failure "Missing V2 benchmark artifact: benchmarks/results/outbox-benchmark-v2.json"
   }
 
   if (Test-Path -LiteralPath (Join-Path $root "src") -PathType Container) {

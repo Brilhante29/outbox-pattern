@@ -1,14 +1,20 @@
-FROM gradle:8-jdk21 AS build
+FROM gradle:8.12-jdk21 AS build
 WORKDIR /app
 COPY gradle/libs.versions.toml gradle/libs.versions.toml
-COPY build.gradle.kts settings.gradle.kts ./
-RUN gradle dependencies --no-daemon 2>&1 || true
+COPY gradle.lockfile build.gradle.kts settings.gradle.kts ./
+RUN --mount=type=cache,target=/home/gradle/.gradle \
+    gradle dependencies --configuration runtimeClasspath --no-daemon
 COPY src ./src
-RUN gradle test --no-daemon 2>&1 || true
-RUN gradle bootJar --no-daemon
+COPY contracts ./contracts
+COPY .portfolio/contracts ./.portfolio/contracts
+RUN --mount=type=cache,target=/home/gradle/.gradle \
+    gradle test bootJar -PexcludeIntegration --no-daemon
 
 FROM eclipse-temurin:21-jre
 WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
+COPY contracts ./contracts
+COPY .portfolio ./.portfolio
+COPY gradle.lockfile ./gradle.lockfile
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

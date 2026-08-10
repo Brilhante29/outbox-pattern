@@ -1,57 +1,32 @@
 package com.portfolio.outbox.application;
 
-import com.portfolio.outbox.domain.OutboxStatus;
-import com.portfolio.outbox.infrastructure.InMemoryOutboxRepository;
-import org.junit.jupiter.api.BeforeEach;
+import com.portfolio.outbox.application.port.OrderTransaction;
+import com.portfolio.outbox.domain.CommerceEvent;
+import com.portfolio.outbox.domain.Order;
 import org.junit.jupiter.api.Test;
 
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 class OrderServiceTest {
-
-    private InMemoryOutboxRepository repository;
-    private OrderService orderService;
-
-    @BeforeEach
-    void setUp() {
-        repository = new InMemoryOutboxRepository();
-        orderService = new OrderService(repository);
-    }
-
     @Test
-    void shouldCreateOrderAndOutboxEvent() {
-        String orderId = orderService.createOrder(Map.of("item", "test-product"));
+    void delegatesOrderAndEventToOneTransactionBoundary() {
+        AtomicReference<Order> savedOrder = new AtomicReference<>();
+        AtomicReference<CommerceEvent> savedEvent = new AtomicReference<>();
+        OrderTransaction transaction = (order, event) -> {
+            savedOrder.set(order);
+            savedEvent.set(event);
+        };
 
-        assertNotNull(orderId);
-        assertEquals(1, repository.count());
-        assertEquals(OutboxStatus.PENDING, repository.findPending().get(0).getStatus());
-        assertEquals("order.created", repository.findPending().get(0).getEventType());
-    }
+        String orderId = new OrderService(transaction).createOrder(Map.of("sku", "book", "quantity", 1));
 
-    @Test
-    void shouldCreateMultipleOrders() {
-        orderService.createOrder(Map.of("item", "product-1"));
-        orderService.createOrder(Map.of("item", "product-2"));
-        orderService.createOrder(Map.of("item", "product-3"));
-
-        assertEquals(3, repository.count());
-        assertEquals(3, repository.findPending().size());
-    }
-
-    @Test
-    void shouldHandleNullOrderData() {
-        String orderId = orderService.createOrder(null);
-        assertNotNull(orderId);
-        assertEquals(1, repository.count());
-    }
-
-    @Test
-    void eachOrderShouldHaveUniqueId() {
-        String orderId1 = orderService.createOrder(Map.of("item", "a"));
-        String orderId2 = orderService.createOrder(Map.of("item", "b"));
-
-        assertNotEquals(orderId1, orderId2);
+        assertEquals(orderId, savedOrder.get().id().toString());
+        assertEquals(savedOrder.get().id(), savedEvent.get().aggregateId());
+        assertEquals("order.created", savedEvent.get().eventType());
+        assertEquals(1, savedEvent.get().eventVersion());
+        assertNotNull(savedEvent.get().correlationId());
     }
 }

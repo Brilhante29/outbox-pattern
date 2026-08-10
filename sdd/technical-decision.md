@@ -1,99 +1,47 @@
 # Technical Decision
 
-## Status
+## Selected Stack
 
-Accepted
+- Java 21 and Gradle Kotlin DSL.
+- Spring Boot 3.4 with Spring MVC and Spring JDBC.
+- PostgreSQL 17.6 with Flyway migrations.
+- Apache Kafka client against Redpanda 26.1.14.
+- Jackson plus NetworkNT JSON Schema validation.
+- JUnit 5 and Testcontainers PostgreSQL.
+- Docker Compose and PowerShell harness.
 
-## Decision Type
+## Why Java, Not Kotlin Here
 
-stack
+The backend reliability program already has Kotlin in `spring-hexagonal-payments`. Keeping this repository in Java demonstrates JVM interoperability and enterprise Java proficiency while sharing the same event envelope and operational conventions. Kotlin conversion would not improve the outbox guarantee.
 
-## Context
+## MVC vs WebFlux
 
-Project: outbox-pattern
-Problem: Prove transactional outbox pattern prevents message loss under failure
-Portfolio program: backend-reliability-platform
-Public signal: Java/Spring Boot enterprise reliability pattern
-Benchmark: lost_messages_under_failure
+Spring MVC is selected because PostgreSQL JDBC and the transaction boundary are blocking. WebFlux would not make the path non-blocking and would obscure the consistency proof.
 
-## Selected Option
+## Persistence
 
-Selected: Spring Boot 3.4 + Java 21 + in-memory adapters
+Spring JDBC is selected over JPA. The two essential operations are explicit:
 
-Reason:
+1. One transaction inserts `orders` and `outbox_event`.
+2. One statement claims rows with `FOR UPDATE SKIP LOCKED` and writes a lease.
 
-Spring Boot is the standard Java framework for transactional patterns. In-memory adapters avoid external infrastructure dependencies while proving the outbox recovery mechanism. The benchmark runs entirely in Docker with no paid services.
+Flyway owns all schema changes. The `(event_id)` primary keys enforce producer identity and consumer idempotency.
 
-## Decision Brain Fields
+## Messaging
 
-- Stack profile: spring-kotlin-backend
-- API style: rest-http
-- Messaging: outbox-only
-- Cloud mode: none
-- Database/runtime: none (in-memory)
-- Library policy: Minimal dependencies: spring-boot-starter-web, jackson-databind, jackson-datatype-jsr310
+The application targets the Kafka protocol through `EventPublisher`. Redpanda is the no-secret local-first implementation. A managed Kafka-compatible service can replace it by changing `KAFKA_BOOTSTRAP_SERVERS`; domain and application code do not change.
 
-## Engineering Principles
+Producer configuration uses `acks=all` and Kafka idempotence. That reduces broker duplicates but does not remove duplicates caused by a crash after broker acknowledgement and before the database status update. The consumer therefore records `eventId` before applying a side effect.
 
-Coupling boundary:
+## Retry and Lease
 
-Domain/use cases must not depend on framework, DB, broker, cloud SDK, transport, or UI.
+- Claimable states: `PENDING`, `FAILED`, and expired `PROCESSING`.
+- Claim order: lowest attempt count, then oldest event.
+- Claim isolation: `FOR UPDATE SKIP LOCKED`.
+- Lease: owner plus expiration timestamp.
+- Publish failure: `FAILED`, error recorded, next attempt timestamp set.
+- Publish success: `PUBLISHED`, publication timestamp recorded.
 
-SOLID application:
+## Cloud Boundary
 
-- SRP: Each class has one responsibility (event, repository, publisher, processor, controller, service)
-- OCP: New event types added without modifying existing events
-- LSP: InMemoryOutboxRepository is substitutable for a real DB repository
-- ISP: Small interfaces (save, markPublished, findPending)
-- DIP: OutboxProcessor depends on OutboxRepository and MessagePublisher abstractions
-
-Simplicity:
-
-- KISS: In-memory stores simulate DB and broker; no external infrastructure needed
-- YAGNI: No JPA, no Hibernate, no real database — not needed to prove the claim
-- DRY: No duplicated business knowledge; event creation encapsulated in OrderService
-
-Testability evidence:
-
-- OrderServiceTest tests use case without transport/infrastructure
-- InMemoryOutboxRepositoryTest tests adapter behavior
-
-## Rejected Options
-
-| Option | Why rejected |
-|---|---|
-| Spring Data JPA + PostgreSQL | Adds latency and complexity; in-memory suffices for benchmark |
-| Real Redpanda/Kafka | Would require running containers and managing topics |
-| Kotlin instead of Java | Java is more canonical for enterprise outbox pattern examples |
-
-## API Contract
-
-REST HTTP:
-
-- POST /orders -> 200 {"orderId": "uuid"}
-
-## Cloud Local-First
-
-Local provider: none (Docker only)
-Real provider target: none
-Config switch: none
-
-## Benchmark Impact
-
-Expected impact: lost_messages_under_failure = 0 (outbox pattern guarantees recovery)
-
-Validation command:
-
-```bash
-docker run --rm outbox-pattern benchmark
-```
-
-## Operational Cost
-
-- Docker services added: none (single container)
-- Local demo complexity: low
-- Failure case required: yes (SimulatedFailureInjector)
-
-## Follow-up
-
-If benchmark shows lost messages > 0, investigate OutboxProcessor error handling and retry logic.
+No cloud dependency is needed for the default path. Kumo is not used because this repo needs Kafka and PostgreSQL semantics, not AWS API emulation. Real cloud targets stay behind JDBC and Kafka configuration/adapters.
