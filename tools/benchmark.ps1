@@ -53,7 +53,7 @@ try {
   docker compose up --detach --wait postgres redpanda
   if ($LASTEXITCODE -ne 0) { throw "PostgreSQL or Redpanda did not become healthy" }
 
-  docker compose run --rm --no-build benchmark
+  docker compose run --rm benchmark
   if ($LASTEXITCODE -ne 0) { throw "Benchmark container failed" }
   if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) {
     throw "Benchmark did not regenerate $resultPath on the host"
@@ -72,7 +72,10 @@ try {
   }
 } finally {
   if (-not $KeepServices) {
-    docker compose down --volumes --remove-orphans 2>$null | Out-Null
+    $cleanupErrorAction = $ErrorActionPreference
+    $ErrorActionPreference = "SilentlyContinue"
+    docker compose down --volumes --remove-orphans *> $null
+    $ErrorActionPreference = $cleanupErrorAction
   }
   foreach ($name in $environmentNames) {
     [Environment]::SetEnvironmentVariable($name, $previousEnvironment[$name], "Process")
