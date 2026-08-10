@@ -1,0 +1,83 @@
+{
+  "schema_version" : 2,
+  "run_id" : "e1e9cd94-a5bd-4061-bba4-1fdefa8d2d63",
+  "project" : "outbox-pattern",
+  "benchmark_id" : "transactional-outbox-failure-recovery",
+  "workload" : {
+    "version" : "outbox-failure-v1",
+    "fixture_digest" : "sha256:c17fc0e018131749abaccc07d252281e89d2d67023da6faf9f0278e3ed6eac0d",
+    "config_digest" : "sha256:4d23ea950f89edfd30f655baa5005ce43a4b20c2c2b45048b9f6429372a8009f",
+    "warmup_iterations" : 0,
+    "measured_iterations" : 3,
+    "concurrency" : 3
+  },
+  "metrics" : [ {
+    "name" : "lost_messages",
+    "value" : 0.0,
+    "unit" : "messages",
+    "direction" : "target",
+    "samples" : [ 0.0, 0.0, 0.0 ],
+    "failures" : 0,
+    "summary" : {
+      "committed_events" : 3,
+      "target" : 0
+    }
+  }, {
+    "name" : "duplicates",
+    "value" : 3.0,
+    "unit" : "messages",
+    "direction" : "lower_is_better",
+    "samples" : [ 1.0, 1.0, 1.0 ],
+    "failures" : 0,
+    "summary" : {
+      "consumer_side_effects" : 3,
+      "raw_deliveries" : 6
+    }
+  }, {
+    "name" : "publish_lag_p95",
+    "value" : 14308.564,
+    "unit" : "milliseconds",
+    "direction" : "lower_is_better",
+    "samples" : [ 14308.564, 10067.75, 4914.889 ],
+    "failures" : 0,
+    "summary" : {
+      "source" : "postgresql_published_at_minus_occurred_at",
+      "statistic" : "p95"
+    }
+  }, {
+    "name" : "retry_count",
+    "value" : 6.0,
+    "unit" : "retries",
+    "direction" : "lower_is_better",
+    "samples" : [ 2.0, 2.0, 2.0 ],
+    "failures" : 0,
+    "summary" : {
+      "acknowledgement_loss_failures" : 3,
+      "broker_outage_failures" : 3
+    }
+  } ],
+  "execution" : {
+    "command" : "powershell -NoProfile -ExecutionPolicy Bypass -File tools/benchmark.ps1",
+    "started_at" : "2026-08-10T05:32:32.361675207Z",
+    "duration_seconds" : 20.529320454,
+    "exit_code" : 0,
+    "repeat" : 3
+  },
+  "environment" : {
+    "runtime" : "Java 21.0.11 / Docker Compose",
+    "architecture" : "amd64",
+    "hardware_class" : "host-dependent-container",
+    "database" : "PostgreSQL 17.6",
+    "broker" : "Redpanda 26.1.14 Kafka API"
+  },
+  "provenance" : {
+    "source_commit" : "52d6b7018fb335aaed3fbd1cb094c1e1e636d236",
+    "clean_tree" : true,
+    "image_ref" : "outbox-pattern:local",
+    "image_digest" : "sha256:dfa816132c5f6a09d39eac1331f9d1a8b5709bf80d6cb24fc62f235908051335",
+    "dependency_lock_digest" : "sha256:1a70b0b038d2c1be980fc557a4182ae44f1c6dfe9355c2ac7f831e9e1e1e6a90",
+    "producer" : "local",
+    "artifact_digest" : "sha256:7ed0a3f13660d1b586f47989b488301fa93a8c37c462f5283166c9157c2c9c71"
+  },
+  "comparability_key" : "outbox-pattern:postgres17-redpanda26:failure-v1"
+}

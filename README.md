@@ -21,7 +21,7 @@ The command starts PostgreSQL and Redpanda, builds the application, hard-stops t
 | `lost_messages` | **0** | Every committed outbox event reached the consumer |
 | `duplicates` | **3** | Deliberate post-publish acknowledgement losses produced one duplicate per event |
 | `retry_count` | **6** | One broker-outage retry and one acknowledgement-loss retry per event |
-| `publish_lag_p95` | See V2 artifact | PostgreSQL `published_at - occurred_at`, regenerated per machine |
+| `publish_lag_p95` | **14,308.564 ms** | PostgreSQL `published_at - occurred_at` in the local failure workload |
 
 The transport guarantee is **at least once**, not exactly once. Exactly-once business side effects come from the consumer-side `processed_event(event_id)` primary key.
 

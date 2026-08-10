@@ -9,5 +9,5 @@
 - [x] Add unit, contract, and PostgreSQL integration tests.
 - [x] Add three-repeat failure benchmark and V2 producer validation.
 - [x] Add host-volume benchmark command and CI.
-- [ ] Generate final evidence from a clean implementation commit.
-- [ ] Validate and commit final evidence.
+- [x] Generate final evidence from a clean implementation commit.
+- [x] Validate and commit final evidence.

@@ -9,6 +9,8 @@ Project: `#20 outbox-pattern`
 - Runtime: PostgreSQL 17.6 plus Redpanda 26.1.14 in Docker Compose.
 - Contract: `contracts/commerce-event-v1.schema.json`.
 - Benchmark: `tools/benchmark.ps1` -> `benchmarks/results/outbox-benchmark-v2.json`.
+- Evidence source: clean implementation commit `52d6b7018fb335aaed3fbd1cb094c1e1e636d236`.
+- Result: `lost_messages=0`, `duplicates=3`, `retry_count=6`, `publish_lag_p95=14308.564 ms`.
 - Push policy for this change: do not push.
 
 ## Implemented Decisions
@@ -35,10 +37,7 @@ Use `./gradlew.bat test` when JDK 21 exists on the host. Without a host JDK, `do
 
 ## Remaining Publication Sequence
 
-1. Commit code and docs without a generated result.
-2. Run `tools/benchmark.ps1` from that clean commit.
-3. Update README only if the deterministic headline metrics differ.
-4. Commit the regenerated V2 artifact and final handoff/status.
-5. Push only when explicitly requested by the principal/user.
+1. Inspect the final local evidence commit and exact diff.
+2. Push only when explicitly requested by the principal/user.
 
 This file records observable decisions and commands only; it does not contain private reasoning or chain-of-thought.

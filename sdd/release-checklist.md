@@ -9,7 +9,7 @@
 - [x] Consumer side effects are deduplicated by `eventId`.
 - [x] Benchmark removes and regenerates the host artifact.
 - [x] Benchmark uses three process crashes and a broker outage.
-- [ ] Fresh V2 result generated from a clean implementation commit.
-- [ ] Validator passes against the fresh result.
-- [ ] Final evidence commit created locally.
+- [x] Fresh V2 result generated from clean implementation commit `52d6b7018fb335aaed3fbd1cb094c1e1e636d236`.
+- [x] Validator passes against the fresh result.
+- [x] Final evidence commit created locally.
 - [ ] Push performed only after explicit request.

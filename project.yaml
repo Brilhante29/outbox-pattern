@@ -12,7 +12,7 @@ program:
   shared_assets:
     - contracts/commerce-event-v1.schema.json
     - transactional-outbox-failure-harness
-status: implemented-awaiting-fresh-evidence
+status: benchmarked
 claim: A real PostgreSQL transactional outbox reaches a Kafka-compatible consumer with zero message loss under process and broker failures
 stack:
   language: java21
