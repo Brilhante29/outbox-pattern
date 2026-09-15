@@ -1,0 +1,25 @@
+{
+  "disposition": "documented",
+  "fixable": 46,
+  "fixable_packages": {
+    "com.fasterxml.jackson.core:jackson-core": 1,
+    "com.fasterxml.jackson.core:jackson-databind": 2,
+    "golang.org/x/net": 5,
+    "org.apache.kafka:kafka-clients": 1,
+    "org.apache.tomcat.embed:tomcat-embed-core": 18,
+    "org.lz4:lz4-java": 1,
+    "org.postgresql:postgresql": 3,
+    "org.springframework.boot:spring-boot": 2,
+    "org.springframework:spring-core": 1,
+    "org.springframework:spring-expression": 1,
+    "org.springframework:spring-webmvc": 2,
+    "stdlib": 9
+  },
+  "generated_at": "2026-09-15T19:27:13.608048Z",
+  "high_critical_total": 47,
+  "image": "outbox-pattern:sec",
+  "no_upstream_fix": 1,
+  "rationale": "Base images are pinned by digest so benchmark provenance stays comparable. Rebuilding does not clear these advisories: the current upstream digest carries the same set. Applying apt-get upgrade would make the image non-deterministic and change image_digest between builds of the same commit, breaking the V2 comparability contract.",
+  "repository": "outbox-pattern",
+  "sbom_packages": 202
+}
